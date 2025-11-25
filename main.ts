@@ -30,6 +30,7 @@ async function callOpenRouter(messages: any[], apiKey: string): Promise<{ type: 
         throw new Error(`OpenRouter API error: ${apiResponse.status} ${apiResponse.statusText} - ${errorBody}`);
     }
     const responseData = await apiResponse.json();
+    throw new Error(JSON.stringify(responseData, null, 2));
     console.log("OpenRouter Response:", JSON.stringify(responseData, null, 2));
     const message = responseData.choices?.[0]?.message;
     if (message?.images?.[0]?.image_url?.url) { return { type: 'image', content: message.images[0].image_url.url }; }
