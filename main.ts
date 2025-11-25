@@ -35,6 +35,11 @@ async function callOpenRouter(messages: any[], apiKey: string): Promise<{ type: 
     if (message?.images?.[0]?.image_url?.url) { return { type: 'image', content: message.images[0].image_url.url }; }
     if (typeof message?.content === 'string' && message.content.startsWith('data:image/')) { return { type: 'image', content: message.content }; }
     if (typeof message?.content === 'string' && message.content.trim() !== '') { return { type: 'text', content: message.content }; }
+    //add by sujialin
+    if (typeof message?.content === 'string' && message.content.startsWith('![image]')) {
+        const imageData = message.content.replace(/^!\[image\]\((.*?)\)$/, '$1');
+        return { type: 'image', content: imageData };
+    }
     return { type: 'text', content: "[模型没有返回有效内容]" };
 }
 
