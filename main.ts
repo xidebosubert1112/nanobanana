@@ -149,9 +149,7 @@ serve(async (req) => {
                 if (result.type === 'image') {
                     return new Response(JSON.stringify({ imageUrl: result.content }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
                 } else {
-                    //return createJsonErrorResponse(`Model returned text instead of an image: "${result.content}"`, 400);
-                    let rdata=JSON.stringify(result);
-                    return createJsonErrorResponse(`Model returned text instead of an image: "${rdata}"`, 400);
+                    return createJsonErrorResponse(`Model returned text instead of an image: "${result.content}"`, 400);
                 }
             } else {
                 const modelscopeApiKey = apikey || Deno.env.get("MODELSCOPE_API_KEY");
