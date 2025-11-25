@@ -31,8 +31,6 @@ async function callOpenRouter(messages: any[], apiKey: string): Promise<{ type: 
     }
     const responseData = await apiResponse.json();
     console.log("OpenRouter Response:", JSON.stringify(responseData, null, 2));
-    return { type: 'text', content: responseData };
-    /*
     const message = responseData.choices?.[0]?.message;
     if (message?.images?.[0]?.image_url?.url) { return { type: 'image', content: message.images[0].image_url.url }; }
     if (typeof message?.content === 'string' && message.content.startsWith('data:image/')) { return { type: 'image', content: message.content }; }
@@ -43,7 +41,6 @@ async function callOpenRouter(messages: any[], apiKey: string): Promise<{ type: 
         return { type: 'image', content: imageData };
     }
     return { type: 'text', content: "[模型没有返回有效内容]" };
-    */
 }
 
 // =======================================================
