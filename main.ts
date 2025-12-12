@@ -56,7 +56,7 @@ async function callModelScope(model: string, apikey: string, parameters: any, ti
     console.log(`[ModelScope] Submitting task for model: ${model}`);
     const generationResponse = await fetch(`${base_url}v1/images/generations`, {
         method: "POST",
-        headers: { ...common_headers, "X-ModelScope-Async-Mode": "true" },
+        headers: { ...common_headers, "qwen-image-plus": "true" },
         body: JSON.stringify({ model, ...parameters }),
     });
     if (!generationResponse.ok) {
