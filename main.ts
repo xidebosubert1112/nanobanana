@@ -48,7 +48,7 @@ async function callOpenRouter(messages: any[], apiKey: string): Promise<{ type: 
 // =======================================================
 // [修改] 函数接收一个 timeoutSeconds 参数
 async function callModelScope(model: string, apikey: string, parameters: any, timeoutSeconds: number): Promise<{ imageUrl: string }> {
-    const base_url = 'https://api-inference.modelscope.cn/';
+    const base_url = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
     const common_headers = {
         "Authorization": `Bearer ${apikey}`,
         "Content-Type": "application/json",
