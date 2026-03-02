@@ -34,9 +34,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     const guidanceInput = document.getElementById('guidance-input');
     const seedInput = document.getElementById('seed-input');
 
+    //add by sujialin at 20260228.
+    const imgModelSelector = document.getElementById('img-model-selector');
+    const imgModelDescrElm = document.getElementById('img-model-descr');
+    const imgModelPaytypeElm = document.getElementById('img-model-paytype');
+    const imgModelPriceElm = document.getElementById('img-model-price');
+    
+    const imgModelInfos=[
+        {
+            name: "gemini-3.1-flash-image-preview",
+            descr: "推荐首选，性能/智能/成本/延迟的最佳平衡，支持图片搜索接地。",
+            paytype: "count",
+            price: "¥0.060 / 次"
+        }, {
+            name: "gemini-3-pro-image-preview",
+            descr: "专业素材制作，支持高达 4K 分辨率，高级推理能力。",
+            paytype: "count",
+            price: "¥0.250 / 次"
+        }, {
+            name: "gemini-2.5-flash-image",
+            descr: "快速高效，适合大批量、低延迟任务。",
+            price: "¥0.060 / 次",
+            paytype: "count"
+        }
+    ];
+
     // --- 状态变量 ---
     let selectedFiles = [];
-    let currentModel = 'Qwen/Qwen-Image';
+    //let currentModel = 'Qwen/Qwen-Image';
+    let currentModel = 'nanobanana';  // 修改默认界面为“Nano Banana”，add by sujialin at 20260228.
     
     const modelStates = {};
     modelCards.forEach(card => {
@@ -85,6 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (modelId === 'nanobanana') {
             state.inputs.prompt = promptNanoBananaInput.value;
             state.inputs.files = selectedFiles;
+            state.inputs.modelName=imgModelSelector.value;
         } else {
             state.inputs.prompt = promptPositiveInput.value;
             state.inputs.negative_prompt = promptNegativeInput.value;
@@ -137,6 +164,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         closeModalBtn.onclick = () => { fullscreenModal.classList.add('hidden'); };
         fullscreenModal.onclick = (e) => { if (e.target === fullscreenModal) { fullscreenModal.classList.add('hidden'); } };
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !fullscreenModal.classList.contains('hidden')) { fullscreenModal.classList.add('hidden'); } });
+
+        /**
+         * 选择Nano Banban模型事件处理。
+         * add by sujialin at 20260228.
+         */
+        //初始化显示模型描述
+        imgModelDescrElm.textContent = imgModelInfos[0].descr;
+        imgModelPaytypeElm.textContent = (imgModelInfos[0].paytype==="count") ? "按次计费" : "按量计费";
+        imgModelPriceElm.textContent = imgModelInfos[0].price;
+        //绑定选择模型控件事件处理函数
+        imgModelSelector.onchange = (e) => {
+            let foundModel=imgModelInfos.find(item => item.name === e.target.value);
+            imgModelDescrElm.textContent = foundModel?.descr;
+            imgModelPaytypeElm.textContent = (foundModel?.paytype==="count") ? "按次计费" : "按量计费";
+            imgModelPriceElm.textContent = foundModel?.price;
+        };
     }
 
     function openModal(imageUrl) { modalImage.src = imageUrl; fullscreenModal.classList.remove('hidden'); }
@@ -282,9 +325,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     async function fetchWithTimeout(resource, options, timeout) {
+        // 创建 AbortController 用于取消请求
         const controller = new AbortController();
+        // 设置超时定时器，超时后取消请求
         const id = setTimeout(() => controller.abort(), timeout);
+        // 发送请求，传入取消信号
         const response = await fetch(resource, { ...options, signal: controller.signal });
+        // 清除定时器
         clearTimeout(id);
         return response;
     }
@@ -294,9 +341,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!promptNanoBananaInput.value.trim()) { throw new Error('请输入提示词'); }
         statusUpdate('正在生成图片...');
         const base64Images = await Promise.all(modelStates.nanobanana.inputs.files.map(fileToBase64));
-        const requestBody = { model: 'nanobanana', prompt: modelStates.nanobanana.inputs.prompt, images: base64Images, apikey: apiKeyOpenRouterInput.value };
-        const response = await fetch('/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) });
+        //const requestBody = { model: 'nanobanana', prompt: modelStates.nanobanana.inputs.prompt, images: base64Images, apikey: apiKeyOpenRouterInput.value };
+        // Modify by sujialin at 20260228.
+        const requestBody = { 
+            model: 'nanobanana', 
+            prompt: modelStates.nanobanana.inputs.prompt, 
+            images: base64Images, 
+            apikey: apiKeyOpenRouterInput.value,
+            modelName: modelStates.nanobanana.inputs.modelName, 
+            imgWHRatio: modelStates.nanobanana.inputs.imgWHRatio
+        };
+        const response = await fetch('/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }, 300000);
         const data = await response.json();
+        console.log(response);
+        console.log(data);
         if (!response.ok || data.error) { throw new Error(data.error || `服务器错误: ${response.status}`); }
         return [data.imageUrl];
     }

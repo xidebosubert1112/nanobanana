@@ -17,20 +17,42 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 // =======================================================
 // 模块 1: OpenRouter API 调用逻辑 (用于 nano banana)
 // =======================================================
-async function callOpenRouter(messages: any[], apiKey: string): Promise<{ type: 'image' | 'text'; content: string }> {
+async function callOpenRouter(modelName: string, messages: any[], apiKey: string): Promise<{ type: 'image' | 'text'; content: string }> {
     if (!apiKey) { throw new Error("callOpenRouter received an empty apiKey."); }
-    const openrouterPayload = { model: "gemini-3-pro-image-preview", messages };
-    console.log("Sending payload to OpenRouter:", JSON.stringify(openrouterPayload, null, 2));
-    const apiResponse = await fetch("https://new.12ai.org/v1/chat/completions", {
+    const pmodelName = (!modelName || modelName.trim() === "") ? "gemini-3-pro-image-preview" : modelName;
+    const openrouterPayload = { model: pmodelName, messages };
+    //console.log("Sending payload to OpenRouter:", JSON.stringify(openrouterPayload, null, 2));
+    const apiResponse = await fetch("https://cdn.12ai.org/v1/chat/completions", {
         method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(openrouterPayload)
     });
+
+    // 记录请求结果，add by sujialin at 20260228.
+    const datenow = new Date();
+    let logmsg=""+datenow.getFullYear()+"-";
+    logmsg += (""+(datenow.getMonth()+1)).padStart(2, '0')+"-";
+    logmsg += (""+(datenow.getDate())).padStart(2, '0')+" ";
+    logmsg += (""+(datenow.getHours())).padStart(2, '0')+":";
+    logmsg += (""+(datenow.getMinutes())).padStart(2, '0')+":";
+    logmsg += (""+(datenow.getSeconds())).padStart(2, '0')+"  ";
     if (!apiResponse.ok) {
         const errorBody = await apiResponse.text();
-        throw new Error(`OpenRouter API error: ${apiResponse.status} ${apiResponse.statusText} - ${errorBody}`);
+        const errmsg=`OpenRouter API error: ${apiResponse.status} ${apiResponse.statusText} - ${errorBody}`;
+        // 记录响应失败结果，add by sujialin at 20260228.
+        logmsg+=errmsg+"\r\n";
+        await Deno.writeTextFile("./nano-banana-response.log", logmsg, {
+            append: true
+        });
+        throw new Error(errmsg);
     }
     const responseData = await apiResponse.json();
-    console.log("OpenRouter Response:", JSON.stringify(responseData, null, 2));
+    // 记录响应成功结果，add by sujialin at 20260228.
+    const successmg=`responseStatus: ${apiResponse.status}, responseStatusText: ${apiResponse.statusText}, content: ${JSON.stringify(responseData)}`;
+    logmsg+=successmg+"\r\n";
+    await Deno.writeTextFile("./nano-banana-response.log", logmsg, {
+        append: true
+    });
+    //console.log("OpenRouter Response:", JSON.stringify(responseData, null, 2));
     const message = responseData.choices?.[0]?.message;
     if (message?.images?.[0]?.image_url?.url) { return { type: 'image', content: message.images[0].image_url.url }; }
     if (typeof message?.content === 'string' && message.content.startsWith('data:image/')) { return { type: 'image', content: message.content }; }
@@ -48,7 +70,7 @@ async function callOpenRouter(messages: any[], apiKey: string): Promise<{ type: 
 // =======================================================
 // [修改] 函数接收一个 timeoutSeconds 参数
 async function callModelScope(model: string, apikey: string, parameters: any, timeoutSeconds: number): Promise<{ imageUrl: string }> {
-    const base_url = 'https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
+    const base_url = 'https://api-inference.modelscope.cn/';
     const common_headers = {
         "Authorization": `Bearer ${apikey}`,
         "Content-Type": "application/json",
@@ -145,7 +167,7 @@ serve(async (req) => {
                     contentPayload.push(...imageParts);
                 }
                 const webUiMessages = [{ role: "user", content: contentPayload }];
-                const result = await callOpenRouter(webUiMessages, openrouterApiKey);
+                const result = await callOpenRouter(requestData.modelName, webUiMessages, openrouterApiKey);
                 if (result.type === 'image') {
                     return new Response(JSON.stringify({ imageUrl: result.content }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
                 } else {

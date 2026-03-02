@@ -331,3 +331,21 @@ select {
     .model-card { border-radius: 0; }
     #theme-toggle-btn { top: 1rem; right: 1rem; }
 }
+
+.img-model-descr {
+    color: #4b5563
+}
+
+.img-model-price-panel {
+    color: #4b5563;
+    display: flex;
+}
+
+#img-model-paytype {
+    margin-right: 10px;
+    border: solid 1px mediumpurple;
+    border-radius: 10px;
+    padding: 0px 5px;
+    background-color: mediumpurple;
+    color: white;
+}
