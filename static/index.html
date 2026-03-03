@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>图片生成</title>
     <link rel="icon" href="/xiguadepi.jpeg" type="image/jpeg">
-    <link rel="stylesheet" href="style.css?v=1">
+    <link rel="stylesheet" href="style.css">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
 </head>
 <body>
     <!-- 全屏预览 Modal -->
@@ -54,10 +57,10 @@
                 </div>
                 <div class="prompt-section">
                     <h2>2. 输入提示词 <span id="nanobanana-prompt-remark" class="prompt-remark"></span></h2>
-                    <textarea id="prompt-input-nanobanana" placeholder="例如：一只穿着超级英雄斗篷的猫，电影级灯光"></textarea>
+                    <textarea id="prompt-input-nanobanana" style="height: 150px" placeholder="输入编辑图片提示词，每行一句提示词。例如：&#13;&#10;1、创建一张专业的电子商务时尚照片。使用蓝色花卉连衣裙。&#13;&#10;2、从第一张图片中获取连衣裙，让第二张图片中的女性穿上它。&#13;&#10;3、生成一张具有自然光影的逼真全身照。"></textarea>
                 </div>
                 <div class="prompt-section">
-                    <h2>3. 选择图片生成模型 <span id="nanobanana-prompt-remark" class="prompt-remark"></span></h2>
+                    <h2>3. 选择图片生成模型 <span class="prompt-remark"></span></h2>
                     <div class="setting-item">
                         <label for="img-model-selector">可用模型</label>
                         <select id="img-model-selector">
@@ -72,11 +75,10 @@
                         </div>
                     </div>
                 </div>
-                <!--
                 <div class="prompt-section">
-                    <h2>4. 选择图片宽高比例 <span id="nanobanana-prompt-remark" class="prompt-remark"></span></h2>
+                    <h2>4. 选择图片宽高比例 <span class="prompt-remark"></span></h2>
                     <div class="setting-item">
-                        <label for="img-whratio-selector">可选比例</label>
+                        <label for="img-whratio-selector">可选比例（宽:高）</label>
                         <select id="img-whratio-selector">
                             <option value="1:1" selected>1:1</option>
                             <option value="1:4">1:4</option>
@@ -95,7 +97,17 @@
                         </select>
                     </div>
                 </div>
-                -->
+                <div class="prompt-section" id="imgsize-panel">
+                    <h2>5. 选择分辨率 <span class="prompt-remark"></span></h2>
+                    <div class="setting-item">
+                        <label for="imgsize-selector">可选分辨率</label>
+                        <select id="imgsize-selector">
+                            <option value="1K">1K（生成速度快，对质量要求不高的测试场景）</option>
+                            <option value="2K" selected>2K（推荐，日常绝大多数图像生成需求）</option>
+                            <option value="4K">4K（生成速度慢，海报、画册、展架等需要近距离观看的大幅印刷品）</option>
+                        </select>
+                    </div>
+                </div>
                 <!-- Nano Banana 专用的生成按钮 -->
                 <button class="generate-btn">
                     <span class="btn-text">生成</span>
@@ -171,8 +183,12 @@
                 <p>生成的图片将显示在这里</p>
             </div>
             <div id="result-thumbnails"></div>
+            <button class="download-btn" id="btn-save-img">
+                <span class="btn-text">保存图片</span>
+                <span class="spinner hidden"></span>
+            </button>
         </div>
     </div>
-    <script src="script.js?v=1"></script>
+    <script src="script.js"></script>
 </body>
 </html>

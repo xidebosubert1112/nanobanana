@@ -2,6 +2,7 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { serveDir } from "https://deno.land/std@0.224.0/http/file_server.ts";
+import { load } from "https://deno.land/std/dotenv/mod.ts";
 
 // --- 辅助函数：创建 JSON 错误响应 ---
 function createJsonErrorResponse(message: string, statusCode = 500) {
@@ -17,42 +18,100 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 // =======================================================
 // 模块 1: OpenRouter API 调用逻辑 (用于 nano banana)
 // =======================================================
-async function callOpenRouter(modelName: string, messages: any[], apiKey: string): Promise<{ type: 'image' | 'text'; content: string }> {
+async function callOpenRouter(modelName: string, messages: any[], apiKey: string, imgWHRatio: string, imgSize: string): Promise<{ type: 'image' | 'text'; content: string }> {
     if (!apiKey) { throw new Error("callOpenRouter received an empty apiKey."); }
+    
     const pmodelName = (!modelName || modelName.trim() === "") ? "gemini-3-pro-image-preview" : modelName;
-    const openrouterPayload = { model: pmodelName, messages };
+    //const openrouterPayload = { model: pmodelName, messages };
     //console.log("Sending payload to OpenRouter:", JSON.stringify(openrouterPayload, null, 2));
-    const apiResponse = await fetch("https://cdn.12ai.org/v1/chat/completions", {
-        method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify(openrouterPayload)
-    });
+    let payload: {
+        contents: Array<{
+            parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }>
+        }>,
+        generationConfig: {
+            imageConfig: { aspectRatio?: string; imageSize?: string; }
+        }
+    } = {
+        contents: [{
+            parts: []
+        }],
+        generationConfig: {
+            imageConfig: {
+                aspectRatio: imgWHRatio,
+                imageSize: ("gemini-2.5-flash-image"===modelName) ? "" : imgSize
+            }
+        }
+    };
+
+    //添加提示词或者图片
+    const regex: RegExp = new RegExp("data:.+base64,", "gi");
+    for (let i=0; i<messages.length; i++) {
+        if (messages[i].type==="prompt") {
+            payload.contents[0].parts.push({
+                text: messages[i].message
+            });
+        } else if (messages[i].type==="image_url") {
+            let imgBase64Data=messages[i].message;
+            //需要去掉前缀
+            imgBase64Data=imgBase64Data.replace(regex, "");
+            payload.contents[0].parts.push({
+                inline_data: {
+                    mime_type: messages[i].mimeType,
+                    data: imgBase64Data
+                }
+            });
+        }
+    }
+
+    // 记录请求参数，add by sujialin at 20260228.
+    let requestLogMsg=generateLogTimestamp();
+    let reqparams=JSON.stringify(payload);
+    const isdev=await isDevEnv();
+    if (isdev) {
+        requestLogMsg+=reqparams+"\r\n";
+        await Deno.writeTextFile("./nano-banana-response.log", requestLogMsg, {
+            append: true
+        });
+    }
+    const apiResponse = await fetchWithTimeout(`https://cdn.12ai.org/v1beta/models/${pmodelName}:generateContent?key=${apiKey}`, {
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: reqparams
+    }, 300000);
 
     // 记录请求结果，add by sujialin at 20260228.
-    const datenow = new Date();
-    let logmsg=""+datenow.getFullYear()+"-";
-    logmsg += (""+(datenow.getMonth()+1)).padStart(2, '0')+"-";
-    logmsg += (""+(datenow.getDate())).padStart(2, '0')+" ";
-    logmsg += (""+(datenow.getHours())).padStart(2, '0')+":";
-    logmsg += (""+(datenow.getMinutes())).padStart(2, '0')+":";
-    logmsg += (""+(datenow.getSeconds())).padStart(2, '0')+"  ";
+    let responseLogMsg=generateLogTimestamp();
     if (!apiResponse.ok) {
         const errorBody = await apiResponse.text();
         const errmsg=`OpenRouter API error: ${apiResponse.status} ${apiResponse.statusText} - ${errorBody}`;
         // 记录响应失败结果，add by sujialin at 20260228.
-        logmsg+=errmsg+"\r\n";
-        await Deno.writeTextFile("./nano-banana-response.log", logmsg, {
-            append: true
-        });
+        if (isdev) {
+            responseLogMsg+=errmsg+"\r\n";
+            await Deno.writeTextFile("./nano-banana-response.log", responseLogMsg, {
+                append: true
+            });
+        }
         throw new Error(errmsg);
     }
     const responseData = await apiResponse.json();
     // 记录响应成功结果，add by sujialin at 20260228.
     const successmg=`responseStatus: ${apiResponse.status}, responseStatusText: ${apiResponse.statusText}, content: ${JSON.stringify(responseData)}`;
-    logmsg+=successmg+"\r\n";
-    await Deno.writeTextFile("./nano-banana-response.log", logmsg, {
-        append: true
-    });
+    if (isdev) {
+        responseLogMsg+=successmg+"\r\n";
+        await Deno.writeTextFile("./nano-banana-response.log", responseLogMsg, {
+            append: true
+        });
+    }
     //console.log("OpenRouter Response:", JSON.stringify(responseData, null, 2));
+    if (responseData.error) return { type: 'text', content: responseData.error }; 
+    if (responseData?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+        let mimeType=responseData.candidates[0].content.parts[0].inlineData.mimeType;
+        let prefix=`data:${mimeType};base64,`;
+        let imgdata=prefix+responseData.candidates[0].content.parts[0].inlineData.data;
+        return { type: 'image', content: imgdata };
+    }
+    return { type: 'text', content: "[模型没有返回有效内容]" };
+    /*
     const message = responseData.choices?.[0]?.message;
     if (message?.images?.[0]?.image_url?.url) { return { type: 'image', content: message.images[0].image_url.url }; }
     if (typeof message?.content === 'string' && message.content.startsWith('data:image/')) { return { type: 'image', content: message.content }; }
@@ -63,6 +122,7 @@ async function callOpenRouter(modelName: string, messages: any[], apiKey: string
     }
     if (typeof message?.content === 'string' && message.content.trim() !== '') { return { type: 'text', content: message.content }; }
     return { type: 'text', content: "[模型没有返回有效内容]" };
+    */
 }
 
 // =======================================================
@@ -120,6 +180,35 @@ async function callModelScope(model: string, apikey: string, parameters: any, ti
     throw new Error(`ModelScope task timed out after ${timeoutSeconds} seconds.`);
 }
 
+function generateLogTimestamp(): string {
+    const datenow = new Date();
+    let logts=""+datenow.getFullYear()+"-";
+    logts += (""+(datenow.getMonth()+1)).padStart(2, '0')+"-";
+    logts += (""+(datenow.getDate())).padStart(2, '0')+" ";
+    logts += (""+(datenow.getHours())).padStart(2, '0')+":";
+    logts += (""+(datenow.getMinutes())).padStart(2, '0')+":";
+    logts += (""+(datenow.getSeconds())).padStart(2, '0')+"  ";
+    return logts;
+}
+
+async function isDevEnv() {
+    const env = await load();
+    const profile = env["profile"];
+    return (profile && profile.trim().toLowerCase() === "dev");
+}
+
+async function fetchWithTimeout(resource: string, options: {}, timeout: number) {
+        // 创建 AbortController 用于取消请求
+    const controller = new AbortController();
+    // 设置超时定时器，超时后取消请求
+    const id = setTimeout(() => controller.abort(), timeout);
+    // 发送请求，传入取消信号
+    const response = await fetch(resource, { ...options, signal: controller.signal });
+    // 清除定时器
+    clearTimeout(id);
+    return response;
+}
+
 // =======================================================
 // 主服务逻辑
 // =======================================================
@@ -155,19 +244,42 @@ serve(async (req) => {
         try {
             // [修改] 从请求体中解构出 timeout
             const requestData = await req.json();
-            const { model, apikey, prompt, images, parameters, timeout } = requestData;
+            const { model, apikey, prompt, images, parameters, timeout, imgWHRatio, imgSize } = requestData;
 
             if (model === 'nanobanana') {
                 const openrouterApiKey = apikey || Deno.env.get("OPENROUTER_API_KEY");
                 if (!openrouterApiKey) { return createJsonErrorResponse("OpenRouter API key is not set.", 500); }
                 if (!prompt) { return createJsonErrorResponse("Prompt is required.", 400); }
+
+                //拆分每行提示词句子
+                let webUiMessages: any[] = [];
+                let sentenses = prompt.split("\n");
+                for (let i=0; i<sentenses.length; i++) {
+                    sentenses[i] = sentenses[i].trim();
+                    webUiMessages.push({
+                        type: "prompt",
+                        message: sentenses[i].trim()
+                    });
+                }
+                
+                if (images && Array.isArray(images) && images.length > 0) {
+                    for (let i=0; i<images.length; i++) {
+                        webUiMessages.push({
+                            type: "image_url",
+                            mimeType: images[i].mime_type,
+                            message: images[i].data
+                        });
+                    }
+                }
+                /*
                 const contentPayload: any[] = [{ type: "text", text: prompt }];
                 if (images && Array.isArray(images) && images.length > 0) {
                     const imageParts = images.map(img => ({ type: "image_url", image_url: { url: img } }));
                     contentPayload.push(...imageParts);
                 }
                 const webUiMessages = [{ role: "user", content: contentPayload }];
-                const result = await callOpenRouter(requestData.modelName, webUiMessages, openrouterApiKey);
+                */
+                const result = await callOpenRouter(requestData.modelName, webUiMessages, openrouterApiKey, imgWHRatio, imgSize);
                 if (result.type === 'image') {
                     return new Response(JSON.stringify({ imageUrl: result.content }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
                 } else {
@@ -189,7 +301,8 @@ serve(async (req) => {
             }
         } catch (error) {
             console.error("Error handling /generate request:", error);
-            return createJsonErrorResponse(error.message, 500);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return createJsonErrorResponse(errorMessage, 500);
         }
     }
 

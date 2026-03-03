@@ -39,6 +39,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const imgModelDescrElm = document.getElementById('img-model-descr');
     const imgModelPaytypeElm = document.getElementById('img-model-paytype');
     const imgModelPriceElm = document.getElementById('img-model-price');
+    const imgWhratioSelector = document.getElementById('img-whratio-selector');
+    const imgsizePanel = document.getElementById('imgsize-panel');
+    const imgsizeSelector = document.getElementById('imgsize-selector');
+    const btnSaveImg = document.getElementById('btn-save-img');
     
     const imgModelInfos=[
         {
@@ -112,6 +116,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.inputs.prompt = promptNanoBananaInput.value;
             state.inputs.files = selectedFiles;
             state.inputs.modelName=imgModelSelector.value;
+            state.inputs.imgWhratio=imgWhratioSelector.value;
+            state.inputs.imgSize=imgsizeSelector.value;
         } else {
             state.inputs.prompt = promptPositiveInput.value;
             state.inputs.negative_prompt = promptNegativeInput.value;
@@ -179,6 +185,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             imgModelDescrElm.textContent = foundModel?.descr;
             imgModelPaytypeElm.textContent = (foundModel?.paytype==="count") ? "按次计费" : "按量计费";
             imgModelPriceElm.textContent = foundModel?.price;
+            if (foundModel?.name === "gemini-2.5-flash-image") {
+                imgsizePanel.style.display = 'none';
+            } else {
+                imgsizePanel.style.display = 'block';
+            }
+        };
+        //绑定保存图片按钮事件处理函数
+        btnSaveImg.onclick = (e) => {
+            let imgdom=mainResultImageContainer.querySelector('img');
+            if (!imgdom) return;
+            const regex = new RegExp("(?<=data:).+(?=;base64,)", "gi");
+            let imgUrl = imgdom.src;
+            let mimeType = imgUrl.match(regex);
+            let imgFileName = (mimeType && mimeType.length && mimeType[0].indexOf("png") > -1) ? '图片.png' : '图片.jpg';
+            if (imgUrl) {
+                const link = document.createElement('a');
+                link.href = imgUrl;
+                link.download = imgFileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
         };
     }
 
@@ -340,7 +368,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (apiKeyOpenRouterInput.parentElement.style.display !== 'none' && !apiKeyOpenRouterInput.value.trim()) { throw new Error('请输入 OpenRouter API 密钥'); }
         if (!promptNanoBananaInput.value.trim()) { throw new Error('请输入提示词'); }
         statusUpdate('正在生成图片...');
-        const base64Images = await Promise.all(modelStates.nanobanana.inputs.files.map(fileToBase64));
+        const base64Images = await Promise.all(modelStates.nanobanana.inputs.files.map(async (file)=>{
+            const base64Data=await fileToBase64(file);
+            return {
+                mime_type: file.type,
+                data: base64Data
+            }
+        }));
         //const requestBody = { model: 'nanobanana', prompt: modelStates.nanobanana.inputs.prompt, images: base64Images, apikey: apiKeyOpenRouterInput.value };
         // Modify by sujialin at 20260228.
         const requestBody = { 
@@ -349,12 +383,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             images: base64Images, 
             apikey: apiKeyOpenRouterInput.value,
             modelName: modelStates.nanobanana.inputs.modelName, 
-            imgWHRatio: modelStates.nanobanana.inputs.imgWHRatio
+            imgWHRatio: modelStates.nanobanana.inputs.imgWhratio,
+            imgSize: modelStates.nanobanana.inputs.imgSize
         };
-        const response = await fetch('/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }, 300000);
+        const response = await fetch('/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) });
         const data = await response.json();
-        console.log(response);
-        console.log(data);
         if (!response.ok || data.error) { throw new Error(data.error || `服务器错误: ${response.status}`); }
         return [data.imageUrl];
     }
@@ -447,7 +480,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         spinner.classList.toggle('hidden', !isLoading);
     }
 
-    function fileToBase64(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); }
+    function fileToBase64(file) { 
+        return new Promise((resolve, reject) => { 
+            const reader = new FileReader(); 
+            reader.onload = () => resolve(reader.result); 
+            reader.onerror = reject; 
+            reader.readAsDataURL(file); 
+        }); 
+    }
+
     function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
     ['dragenter', 'dragover'].forEach(eventName => uploadArea.addEventListener(eventName, () => uploadArea.classList.add('drag-over')));
     ['dragleave', 'drop'].forEach(eventName => uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('drag-over')));
